@@ -7,25 +7,28 @@ app = Flask(__name__)
 def home():
   return jsonify({
       "status": "online",
-      "message": "Jarvis Cloud Brain is active and ready for online tasks!",
+      "message": "Jarvis Cloud Brain is active and ready!",
   })
 
 
-# This route will handle incoming commands from Alexa or web services later
 @app.route("/command", methods=["POST"])
 def handle_command():
+  # Get data sent by Alexa
   data = request.get_json() or {}
-  user_query = data.get("query", "No query provided")
 
-  # For now, we will just echo back a confirmation response
-  return jsonify({
-      "status": "success",
-      "received_query": user_query,
-      "reply": (
-          f"I received your online instruction: '{user_query}'. Gmail and"
-          " browser integrations are coming up next!"
-      ),
-  })
+  # Default reply message
+  reply_text = "Jarvis cloud brain is online and connected to your Alexa skill!"
+
+  # Alexa requires responses to follow this exact structure
+  alexa_response = {
+      "version": "1.0",
+      "response": {
+          "outputSpeech": {"type": "PlainText", "text": reply_text},
+          "shouldEndSession": True,
+      },
+  }
+
+  return jsonify(alexa_response)
 
 
 if __name__ == "__main__":
