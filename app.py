@@ -1,12 +1,16 @@
-from flask import Flask
+from flask import Flask, jsonify, request
 
 app = Flask(__name__)
 
 
-@app.route("/")
+@app.route("/", methods=["GET"])
 def home():
-  return "Jarvis Backend is Alive!"
+  return jsonify({
+      "status": "online",
+      "message": "Jarvis Cloud Brain is up and running!",
+  })
 
 
 if __name__ == "__main__":
   app.run(host="0.0.0.0", port=5000)
+  
