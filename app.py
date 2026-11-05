@@ -5,32 +5,44 @@ app = Flask(__name__)
 
 @app.route("/", methods=["GET"])
 def home():
-  return jsonify({"status": "online", "message": "Jarvis Cloud Brain is active!"})
+  return jsonify(
+      {"status": "online", "message": "Jarvis Cloud Brain is active!"}
+  )
 
 
 @app.route("/command", methods=["POST"])
 def handle_command():
   req_data = request.get_json() or {}
 
-  # Determine what kind of request Alexa sent (LaunchRequest vs IntentRequest)
+  # Safely extract request type and intent name
   request_type = req_data.get("request", {}).get("type", "")
+  intent_name = (
+      req_data.get("request", {}).get("intent", {}).get("name", "Unknown")
+  )
 
+  # Formulate appropriate response text
   if request_type == "LaunchRequest":
-    reply_text = "Jarvis is online. How can I assist you today?"
+    reply_text = "Jarvis is online and ready for your commands!"
   elif request_type == "IntentRequest":
-    intent_name = req_data.get("request", {}).get("intent", {}).get("name", "")
-    reply_text = (
-        f"Jarvis cloud brain received your request for intent {intent_name}!"
-    )
+    if intent_name in ["AMAZON.StopIntent", "AMAZON.CancelIntent"]:
+      reply_text = "Goodbye!"
+    elif intent_name == "AMAZON.HelpIntent":
+      reply_text = (
+          "You can ask Jarvis to run web searches or check your emails."
+      )
+    else:
+      reply_text = (
+          f"Jarvis cloud brain successfully executed intent {intent_name}!"
+      )
   else:
     reply_text = "Jarvis received your command!"
 
-  # Standard Alexa JSON format
+  # Strict Alexa ASK JSON Response Structure
   alexa_response = {
       "version": "1.0",
       "response": {
           "outputSpeech": {"type": "PlainText", "text": reply_text},
-          "shouldEndSession": False,  # Keep listening for next command
+          "shouldEndSession": False,
       },
   }
 
