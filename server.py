@@ -4,23 +4,23 @@ import os
 
 app = Flask(__name__)
 
-# Reads the GEMINI_API_KEY set in Render's Environment Variables
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
-@app.route('/ask', methods=['POST'])
+@app.route('/ask', methods=['POST', 'GET'])
 def ask():
-    data = request.get_json() or {}
-    user_prompt = data.get("prompt", "")
+    # silent=True prevents the 415 error if the header is missing
+    data = request.get_json(silent=True) or {}
+    
+    # Grab prompt from JSON body, or fallback to URL query parameters (?prompt=...)
+    user_prompt = data.get("prompt") or request.args.get("prompt", "")
 
-    # 1. Local / Remote Action Hooks
-    if "ping phone" in user_prompt.lower():
-        return jsonify({"reply": "Sending ping signal to your phone."})
+    if not user_prompt:
+        return jsonify({"reply": "Hello! Jarvis is online and listening. Send a prompt to chat."})
 
-    # 2. Forward query to Gemini Cloud
     try:
         response = client.models.generate_content(
-            model='gemini-3.8-flash',
+            model='gemini-2.5-flash',
             contents=user_prompt
         )
         return jsonify({"reply": response.text})
@@ -31,6 +31,5 @@ def ask():
         return jsonify({"reply": f"Error: {error_message}"})
 
 if __name__ == '__main__':
-    # Render assigns its own port dynamically
     port = int(os.environ.get("PORT", 5000))
     app.run(host='0.0.0.0', port=port)
