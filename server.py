@@ -16,16 +16,15 @@ def ask():
         return jsonify({"reply": "Jarvis is online and ready."})
 
     try:
-        # Explicitly using gemini-3.8-flash as requested
+        # Testing with gemini-3.8-flash
         response = client.models.generate_content(
             model='gemini-3.8-flash',
             contents=user_prompt
         )
         return jsonify({"reply": response.text})
     except Exception as e:
-        error_msg = str(e)
-        print(f"API Error: {error_msg}") # Logs it in Render so you can see it
-        return jsonify({"reply": f"The model is currently busy or hitting rate limits. Please try again in a moment."})
+        # This will send the EXACT raw error back to your screen so we can fix it instantly
+        return jsonify({"reply": f"RAW ERROR: {str(e)}"})
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 5000))
