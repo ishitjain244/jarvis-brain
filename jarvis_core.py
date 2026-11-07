@@ -161,7 +161,8 @@ User Memory Ledger:
     except Exception as e:
         return {"error": str(e)}
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, Response, jsonify
+import os
 
 app = Flask(__name__)
 
@@ -179,9 +180,15 @@ def chat_endpoint():
         return jsonify({"error": "No message provided"}), 400
         
     result = chat_with_jarvis(speaker, message)
-    return jsonify(result), 200
+    
+    # If audio bytes are generated, return them as an mp3 stream
+    if result.get("has_audio"):
+        audio_bytes = speak_response(result.get("text"))
+        if audio_bytes:
+            return Response(audio_bytes, mimetype="audio/mpeg")
+            
+    return jsonify({"text": result.get("text")}), 200
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
-    
