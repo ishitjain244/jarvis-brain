@@ -1,47 +1,62 @@
 import os
 import requests
-import pymongo
 
-# Load environment variables injected by cloud provider (Koyeb / AWS / Render)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
 CARTESIA_VOICE_ID = os.getenv("CARTESIA_VOICE_ID")
-MONGO_URI = os.getenv("MONGO_URI")
+
+# JSONBin Cloud Credentials
+JSONBIN_BIN_ID = os.getenv("JSONBIN_BIN_ID")
+JSONBIN_API_KEY = os.getenv("JSONBIN_API_KEY")
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# --- Cloud Database Memory Setup ---
-if MONGO_URI:
-    client = pymongo.MongoClient(MONGO_URI)
-    db = client["jarvis_db"]
-    memory_collection = db["memory"]
-else:
-    memory_collection = None
-
 def load_memory():
-    if memory_collection is not None:
-        doc = memory_collection.find_one({"type": "lore"})
-        if doc and "bullets" in doc:
-            return doc["bullets"]
+    if not JSONBIN_BIN_ID or not JSONBIN_API_KEY:
+        return [
+            "- User prefers to be addressed continuously as 'Sir'.",
+            "- User values high emotional expression and accurate punctuation pacing."
+        ]
+    
+    url = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}/latest"
+    headers = {"X-Master-Key": JSONBIN_API_KEY}
+    
+    try:
+        res = requests.get(url, headers=headers)
+        if res.status_code == 200:
+            data = res.json()
+            return data.get("record", {}).get("bullets", [])
+    except Exception:
+        pass
+        
     return [
         "- User prefers to be addressed continuously as 'Sir'.",
         "- User values high emotional expression and accurate punctuation pacing."
     ]
 
-def save_memory_bullet(new_bullet):
-    if memory_collection is not None:
-        memory_collection.update_one(
-            {"type": "lore"},
-            {"$push": {"bullets": new_bullet}},
-            upsert=True
-        )
+def save_memory_bullets(bullets_list):
+    if not JSONBIN_BIN_ID or not JSONBIN_API_KEY:
+        return
+        
+    url = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Master-Key": JSONBIN_API_KEY
+    }
+    payload = {"bullets": bullets_list}
+    
+    try:
+        requests.put(url, json=payload, headers=headers)
+    except Exception:
+        pass
 
 def update_bullet_memory(user_input, bot_response):
-    current_bullets = "\n".join(load_memory())
+    current_bullets = load_memory()
+    bullets_text = "\n".join(current_bullets)
     
     summary_prompt = f"""
 Existing Memory:
-{current_bullets}
+{bullets_text}
 
 Latest Exchange:
 User: {user_input}
@@ -63,7 +78,8 @@ If NO, respond strictly with 'NONE'.
         res = requests.post(GROQ_URL, json=payload, headers=headers).json()
         new_fact = res["choices"][0]["message"]["content"].strip()
         if new_fact != "NONE" and new_fact.startswith("-"):
-            save_memory_bullet(new_fact)
+            current_bullets.append(new_fact)
+            save_memory_bullets(current_bullets)
     except Exception:
         pass
 
@@ -87,7 +103,7 @@ def speak_response(text):
     try:
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 200:
-            return response.content # Returns raw audio payload to cloud client or Alexa
+            return response.content
     except Exception as e:
         print(f"[Speech Error] {e}")
     return None
