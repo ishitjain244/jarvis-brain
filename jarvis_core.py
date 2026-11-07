@@ -160,3 +160,28 @@ User Memory Ledger:
             
     except Exception as e:
         return {"error": str(e)}
+
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route("/", methods=["GET"])
+def health_check():
+    return jsonify({"status": "Jarvis is online and active!"}), 200
+
+@app.route("/chat", methods=["POST"])
+def chat_endpoint():
+    data = request.json or {}
+    speaker = data.get("speaker", "me")
+    message = data.get("message", "")
+    
+    if not message:
+        return jsonify({"error": "No message provided"}), 400
+        
+    result = chat_with_jarvis(speaker, message)
+    return jsonify(result), 200
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+    
