@@ -1,11 +1,14 @@
 import os
 import requests
+from flask import Flask, request, Response, jsonify
 
+app = Flask(__name__)
+
+# --- Load Environment Variables ---
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 CARTESIA_API_KEY = os.getenv("CARTESIA_API_KEY")
 CARTESIA_VOICE_ID = os.getenv("CARTESIA_VOICE_ID")
 
-# JSONBin Cloud Credentials
 JSONBIN_BIN_ID = os.getenv("JSONBIN_BIN_ID")
 JSONBIN_API_KEY = os.getenv("JSONBIN_API_KEY")
 
@@ -161,10 +164,7 @@ User Memory Ledger:
     except Exception as e:
         return {"error": str(e)}
 
-from flask import Flask, request, Response, jsonify
-import os
-
-app = Flask(__name__)
+# --- Flask Web Server Routes ---
 
 @app.route("/", methods=["GET"])
 def health_check():
@@ -181,7 +181,6 @@ def chat_endpoint():
         
     result = chat_with_jarvis(speaker, message)
     
-    # If audio bytes are generated, return them as an mp3 stream
     if result.get("has_audio"):
         audio_bytes = speak_response(result.get("text"))
         if audio_bytes:
