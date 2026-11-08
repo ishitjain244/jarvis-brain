@@ -64,7 +64,9 @@ Instruction: Did the user reveal a significant personal preference or key lore? 
 
 def speak_response(text):
     if not CARTESIA_API_KEY or not CARTESIA_VOICE_ID:
+        print(f"[Cartesia Error] Missing environment variables! KEY: {bool(CARTESIA_API_KEY)}, VOICE: {bool(CARTESIA_VOICE_ID)}")
         return None
+        
     url = "https://api.cartesia.ai/tts/bytes"
     headers = {
         "X-API-Key": CARTESIA_API_KEY,
@@ -81,9 +83,12 @@ def speak_response(text):
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 200:
             return response.content
+        else:
+            print(f"[Cartesia API Failed] Status Code: {response.status_code}, Response: {response.text}")
     except Exception as e:
-        print(f"[Speech Error] {e}")
+        print(f"[Cartesia Exception] {e}")
     return None
+
 
 def chat_with_jarvis(speaker_type, user_input):
     bullets_text = "\n".join(load_memory())
