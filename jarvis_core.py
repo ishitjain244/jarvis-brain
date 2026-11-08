@@ -13,6 +13,7 @@ AUDIO_CACHE = {}
 
 def chat_with_jarvis(speaker, message):
     try:
+        # 1. Query Groq LLM
         groq_headers = {
             "Authorization": f"Bearer {GROQ_API_KEY}",
             "Content-Type": "application/json"
@@ -30,6 +31,7 @@ def chat_with_jarvis(speaker, message):
         groq_data = groq_res.json()
         reply_text = groq_data.get("choices", [{}])[0].get("message", {}).get("content", "At your service, Sir.")
         
+        # 2. Generate custom voice audio bytes via Cartesia TTS API
         cartesia_headers = {
             "Authorization": f"Bearer {CARTESIA_API_KEY}",
             "Cartesia-Version": "2024-06-10",
@@ -83,24 +85,7 @@ def alexa_webhook():
     user_speech = "Hello"
     
     if req_type == "LaunchRequest":
-        reply_text = "Jarvis online and awaiting your command, Sir."
-        return jsonify({
-            "version": "1.0",
-            "response": {
-                "outputSpeech": {
-                    "type": "PlainText",
-                    "text": reply_text
-                },
-                "reprompt": {
-                    "outputSpeech": {
-                        "type": "PlainText",
-                        "text": "What are your orders, Sir?"
-                    }
-                },
-                "shouldEndSession": False  # Keeps microphone open so it doesn't disconnect!
-            }
-        })
-        
+        user_speech = "Jarvis online and awaiting your command, Sir."
     elif req_type == "IntentRequest":
         intent_name = req.get("request", {}).get("intent", {}).get("name", "")
         
@@ -119,36 +104,64 @@ def alexa_webhook():
                 user_speech = val["value"]
                 break
 
+    # Handle exit command gracefully
     if user_speech.lower() in ["exit", "stop", "bye", "quit", "shut down"]:
         return jsonify({
             "version": "1.0",
             "response": {
-                "outputSpeech": {"type": "PlainText", "text": "Shutting down systems, Sir."},
+                "outputSpeech": {"type": "PlainText", "text": "Shutting down audio systems, Sir."},
                 "shouldEndSession": True
             }
         })
 
-    # Generate normal chat response text
+    # Run Groq + Cartesia pipeline to generate custom voice bytes
     result = chat_with_jarvis("me", user_speech)
     reply_text = result.get("text")
+    audio_bytes = result.get("audio_bytes")
+    
+    if not audio_bytes:
+        return jsonify({
+            "version": "1.0",
+            "response": {
+                "outputSpeech": {"type": "PlainText", "text": reply_text or "Systems active, Sir."},
+                "shouldEndSession": False
+            }
+        })
 
-    # Keep session open (`shouldEndSession: false`) so Alexa listens for your next sentence without disconnecting
+    # Cache audio bytes and serve via secure GET stream URL for Alexa AudioPlayer
+    audio_id = str(uuid.uuid4())
+    AUDIO_CACHE[audio_id] = audio_bytes
+    
+    audio_stream_url = f"https://jarvis-brain-3y1y.onrender.com/stream-audio/{audio_id}"
+
     return jsonify({
         "version": "1.0",
         "response": {
-            "outputSpeech": {
-                "type": "PlainText",
-                "text": reply_text
-            },
-            "reprompt": {
-                "outputSpeech": {
-                    "type": "PlainText",
-                    "text": "Standing by for your next command, Sir."
+            "outputSpeech": None,
+            "directives": [
+                {
+                    "type": "AudioPlayer.Play",
+                    "playBehavior": "REPLACE_ALL",
+                    "audioItem": {
+                        "stream": {
+                            "url": audio_stream_url,
+                            "token": audio_id,
+                            "offsetInMilliseconds": 0
+                        }
+                    }
                 }
-            },
-            "shouldEndSession": False
+            ],
+            "shouldEndSession": False  # Keeps session open so you can continue talking after playback
         }
     })
+
+@app.route("/stream-audio/<audio_id>", methods=["GET"])
+def stream_cached_audio(audio_id):
+    audio_bytes = AUDIO_CACHE.get(audio_id)
+    if not audio_bytes:
+        return "Audio stream expired or not found", 404
+        
+    return Response(audio_bytes, mimetype="audio/mpeg")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
