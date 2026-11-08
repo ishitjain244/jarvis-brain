@@ -191,9 +191,20 @@ def alexa_webhook():
     req = request.json or {}
     req_type = req.get("request", {}).get("type", "")
     
-    # Extract what the user said to Alexa
     user_speech = "Hello"
     if req_type == "IntentRequest":
+        intent_name = req.get("request", {}).get("intent", {}).get("name", "")
+        
+        # Catch Alexa's built-in stop/cancel intents or user saying exit words
+        if intent_name in ["AMAZON.StopIntent", "AMAZON.CancelIntent"]:
+            return jsonify({
+                "version": "1.0",
+                "response": {
+                    "outputSpeech": {"type": "PlainText", "text": "Goodbye, Sir."},
+                    "shouldEndSession": True
+                }
+            })
+            
         slots = req.get("request", {}).get("intent", {}).get("slots", {})
         for key, val in slots.items():
             if "value" in val:
@@ -202,10 +213,23 @@ def alexa_webhook():
     elif req_type == "LaunchRequest":
         user_speech = "Hi Jarvis"
 
-    # Get response from Groq & Cartesia using your existing function
+    # Also catch text-based exit triggers if passed through speech slot
+    if user_speech.lower() in ["exit", "stop", "bye", "quit", "shut down"]:
+        return jsonify({
+            "version": "1.0",
+            "response": {
+                "outputSpeech": {"type": "PlainText", "text": "Shutting down, Sir."},
+                "shouldEndSession": True
+            }
+        })
+
+    # Normal chat processing...
     result = chat_with_jarvis("me", user_speech)
     reply_text = result.get("text")
     audio_bytes = result.get("audio_bytes")
+    
+    # (Rest of your AudioPlayer stream response code goes here...)
+
     
     if not audio_bytes:
         return jsonify({
