@@ -1,4 +1,5 @@
 import os
+import sys
 import requests
 from flask import Flask, request, Response, jsonify
 
@@ -64,31 +65,48 @@ Instruction: Did the user reveal a significant personal preference or key lore? 
 
 def speak_response(text):
     if not CARTESIA_API_KEY or not CARTESIA_VOICE_ID:
-        print(f"[Cartesia Error] Missing environment variables! KEY: {bool(CARTESIA_API_KEY)}, VOICE: {bool(CARTESIA_VOICE_ID)}")
+        print(f"[CARTESIA MISSING LOG] KEY: {bool(CARTESIA_API_KEY)}, VOICE: {bool(CARTESIA_VOICE_ID)}")
+        sys.stdout.flush()
         return None
         
     url = "https://api.cartesia.ai/tts/bytes"
+    
+    # Corrected headers supporting both standard Cartesia auth schemes
     headers = {
+        "Authorization": f"Bearer {CARTESIA_API_KEY}",
         "X-API-Key": CARTESIA_API_KEY,
         "Cartesia-Version": "2024-06-10",
         "Content-Type": "application/json"
     }
+    
     payload = {
         "model_id": "sonic-english",
         "transcript": text,
-        "voice": {"mode": "id", "id": CARTESIA_VOICE_ID},
-        "output_format": {"container": "mp3", "encoding": "mp3", "sample_rate": 44100}
+        "voice": {
+            "mode": "id",
+            "id": CARTESIA_VOICE_ID
+        },
+        "output_format": {
+            "container": "mp3",
+            "encoding": "mp3",
+            "sample_rate": 44100
+        }
     }
+    
     try:
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code == 200:
+            print("[CARTESIA SUCCESS] Voice bytes generated successfully!")
+            sys.stdout.flush()
             return response.content
         else:
-            print(f"[Cartesia API Failed] Status Code: {response.status_code}, Response: {response.text}")
+            print(f"[CARTESIA API ERROR] Status Code: {response.status_code} | Body: {response.text}")
+            sys.stdout.flush()
     except Exception as e:
-        print(f"[Cartesia Exception] {e}")
+        print(f"[CARTESIA EXCEPTION] {str(e)}")
+        sys.stdout.flush()
+        
     return None
-
 
 def chat_with_jarvis(speaker_type, user_input):
     bullets_text = "\n".join(load_memory())
@@ -115,7 +133,7 @@ Memory:
         "model": "qwen/qwen3.8-27b",
         "messages": messages,
         "temperature": 0.3,
-        "max_tokens": 20  # Extremely tight limit to prevent rate-limit errors entirely!
+        "max_tokens": 20
     }
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
@@ -124,7 +142,7 @@ Memory:
         res = res_raw.json()
         
         if "choices" not in res:
-            return {"text": "Online, Sir."}
+            return {"text": "Online, Sir.", "audio_bytes": None}
             
         reply = res["choices"][0]["message"]["content"]
         audio_bytes = speak_response(reply)
@@ -135,7 +153,7 @@ Memory:
         return {"text": reply, "audio_bytes": audio_bytes}
             
     except Exception as e:
-        return {"text": "Error, Sir."}
+        return {"text": "Error, Sir.", "audio_bytes": None}
 
 @app.route("/", methods=["GET"])
 def health_check():
