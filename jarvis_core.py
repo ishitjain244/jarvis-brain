@@ -50,7 +50,7 @@ Instruction: Did the user reveal a significant personal preference or key lore? 
         "model": "qwen/qwen3.8-27b",
         "messages": [{"role": "user", "content": summary_prompt}],
         "temperature": 0.2,
-        "max_tokens": 50
+        "max_tokens": 30
     }
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     try:
@@ -89,17 +89,15 @@ def chat_with_jarvis(speaker_type, user_input):
     bullets_text = "\n".join(load_memory())
     
     system_instruction = f"""
-You are Jarvis, an ultra-concise, loyal personal voice assistant. Address the master as 'Sir'.
+You are Jarvis, an ultra-concise voice assistant. Address the user as 'Sir'.
+RULES:
+1. MAXIMUM 3 TO 6 WORDS. Never write long sentences or paragraphs.
+2. Direct match examples:
+   - User: "Hi" -> Reply: "Hello, Sir."
+   - User: "What are you doing?" -> Reply: "Standing by, Sir."
+3. Use light natural punctuation (..., ,, ?) for human-like voice pacing.
 
-CRITICAL RULES FOR RESPONSE LENGTH & STYLE:
-1. KEEP IT EXTREMELY SHORT. Maximum 3 to 10 words. NEVER write paragraphs or filler text.
-2. Match the exact intent directly:
-   - If user says "Hi", reply: "Hello, Sir."
-   - If user says "What are you doing?", reply: "Nothing, Sir... just standing by."
-   - If user asks a question, give a direct, 1-sentence answer.
-3. Use natural punctuation for Cartesia voice pacing (..., ,, --, ?, !).
-
-User Memory Ledger:
+Memory:
 {bullets_text}
 """
 
@@ -111,8 +109,8 @@ User Memory Ledger:
     payload = {
         "model": "qwen/qwen3.8-27b",
         "messages": messages,
-        "temperature": 0.5,
-        "max_tokens": 40  # Hard limit prevents long rambling paragraphs!
+        "temperature": 0.3,
+        "max_tokens": 20  # Extremely tight limit to prevent rate-limit errors entirely!
     }
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
@@ -121,7 +119,7 @@ User Memory Ledger:
         res = res_raw.json()
         
         if "choices" not in res:
-            return {"text": "Systems online, Sir."}
+            return {"text": "Online, Sir."}
             
         reply = res["choices"][0]["message"]["content"]
         audio_bytes = speak_response(reply)
