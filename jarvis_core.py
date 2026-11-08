@@ -150,11 +150,10 @@ User Memory Ledger:
     }
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
-        try:
+    try:
         res_raw = requests.post(GROQ_URL, json=payload, headers=headers)
         res = res_raw.json()
         
-        # This will print the raw Groq error to your Render dashboard logs if it fails
         if "choices" not in res:
             print(f"--- GROQ API ERROR DEBUG ---: {res}")
             return {"text": f"Groq Error: {res.get('error', {}).get('message', 'Unknown error')}"}
@@ -170,7 +169,6 @@ User Memory Ledger:
     except Exception as e:
         print(f"--- EXCEPTION DEBUG ---: {str(e)}")
         return {"text": f"Error: {str(e)}"}
-
 
 # --- Flask Web Server Routes ---
 
