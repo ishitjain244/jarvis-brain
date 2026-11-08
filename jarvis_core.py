@@ -180,3 +180,74 @@ def chat_endpoint():
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
+
+import uuid
+
+# Temporary in-memory audio store for Alexa GET requests
+AUDIO_CACHE = {}
+
+@app.route("/alexa", methods=["POST"])
+def alexa_webhook():
+    req = request.json or {}
+    req_type = req.get("request", {}).get("type", "")
+    
+    # Extract what the user said to Alexa
+    user_speech = "Hello"
+    if req_type == "IntentRequest":
+        slots = req.get("request", {}).get("intent", {}).get("slots", {})
+        for key, val in slots.items():
+            if "value" in val:
+                user_speech = val["value"]
+                break
+    elif req_type == "LaunchRequest":
+        user_speech = "Hi Jarvis"
+
+    # Get response from Groq & Cartesia using your existing function
+    result = chat_with_jarvis("me", user_speech)
+    reply_text = result.get("text")
+    audio_bytes = result.get("audio_bytes")
+    
+    if not audio_bytes:
+        return jsonify({
+            "version": "1.0",
+            "response": {
+                "outputSpeech": {"type": "PlainText", "text": reply_text},
+                "shouldEndSession": False
+            }
+        })
+
+    # Store audio bytes in memory for Alexa to fetch via GET
+    audio_id = str(uuid.uuid4())
+    AUDIO_CACHE[audio_id] = audio_bytes
+
+    audio_stream_url = f"https://jarvis-brain-3y1y.onrender.com/stream-audio/{audio_id}"
+
+    alexa_response = {
+        "version": "1.0",
+        "response": {
+            "outputSpeech": None,
+            "directives": [
+                {
+                    "type": "AudioPlayer.Play",
+                    "playBehavior": "REPLACE_ALL",
+                    "audioItem": {
+                        "stream": {
+                            "url": audio_stream_url,
+                            "token": audio_id,
+                            "offsetInMilliseconds": 0
+                        }
+                    }
+                }
+            ],
+            "shouldEndSession": False
+        }
+    }
+    return jsonify(alexa_response)
+
+@app.route("/stream-audio/<audio_id>", methods=["GET"])
+def stream_cached_audio(audio_id):
+    audio_bytes = AUDIO_CACHE.get(audio_id)
+    if not audio_bytes:
+        return "Audio not found", 404
+    return Response(audio_bytes, mimetype="audio/mpeg")
+    
