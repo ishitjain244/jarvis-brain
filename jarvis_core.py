@@ -143,15 +143,22 @@ User Memory Ledger:
         {"role": "user", "content": user_input}
     ]
     
-    payload = {
-        "model": "qwen/qwen3.8-27b",
+        payload = {
+        "model": "openai/gpt-oss-120b", # Using a highly stable production model route on Groq
         "messages": messages,
         "temperature": 0.7
     }
     headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     
     try:
-        res = requests.post(GROQ_URL, json=payload, headers=headers).json()
+        res_raw = requests.post(GROQ_URL, json=payload, headers=headers)
+        res = res_raw.json()
+        
+        # Safety check: print the response to Render logs if something goes wrong
+        if "choices" not in res:
+            print(f"[Groq Error Response]: {res}")
+            return {"error": str(res)}
+            
         reply = res["choices"][0]["message"]["content"]
         
         audio_bytes = speak_response(reply)
@@ -163,6 +170,7 @@ User Memory Ledger:
             
     except Exception as e:
         return {"error": str(e)}
+
 
 # --- Flask Web Server Routes ---
 
