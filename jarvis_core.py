@@ -71,7 +71,7 @@ If NO, respond strictly with 'NONE'.
 """
     
     payload = {
-        "model": "llama-3.3-70b-versatile",
+        "model": "qwen/qwen3.8-27b",
         "messages": [{"role": "user", "content": summary_prompt}],
         "temperature": 0.2
     }
@@ -144,7 +144,7 @@ User Memory Ledger:
     ]
     
     payload = {
-        "model": "llama-3.3-70b-versatile",
+        "model": "qwen/qwen3.8-27b",
         "messages": messages,
         "temperature": 0.7
     }
