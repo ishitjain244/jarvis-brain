@@ -71,7 +71,7 @@ If NO, respond strictly with 'NONE'.
 """
     
     payload = {
-        "model": "qwen/qwen3.8-27b",
+        "model": "llama-3.3-70b-versatile",
         "messages": [{"role": "user", "content": summary_prompt}],
         "temperature": 0.2
     }
@@ -143,8 +143,8 @@ User Memory Ledger:
         {"role": "user", "content": user_input}
     ]
     
-        payload = {
-        "model": "openai/gpt-oss-120b", # Using a highly stable production model route on Groq
+    payload = {
+        "model": "llama-3.3-70b-versatile",
         "messages": messages,
         "temperature": 0.7
     }
@@ -154,13 +154,10 @@ User Memory Ledger:
         res_raw = requests.post(GROQ_URL, json=payload, headers=headers)
         res = res_raw.json()
         
-        # Safety check: print the response to Render logs if something goes wrong
         if "choices" not in res:
-            print(f"[Groq Error Response]: {res}")
-            return {"error": str(res)}
+            return {"text": "I encountered an issue processing your request through Groq."}
             
         reply = res["choices"][0]["message"]["content"]
-        
         audio_bytes = speak_response(reply)
         
         if speaker_type.lower() == "me":
@@ -169,8 +166,7 @@ User Memory Ledger:
         return {"text": reply, "has_audio": audio_bytes is not None}
             
     except Exception as e:
-        return {"error": str(e)}
-
+        return {"text": f"Error: {str(e)}"}
 
 # --- Flask Web Server Routes ---
 
