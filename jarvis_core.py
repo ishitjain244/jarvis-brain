@@ -71,7 +71,6 @@ def speak_response(text):
         
     url = "https://api.cartesia.ai/tts/bytes"
     
-    # Corrected headers supporting both standard Cartesia auth schemes
     headers = {
         "Authorization": f"Bearer {CARTESIA_API_KEY}",
         "X-API-Key": CARTESIA_API_KEY,
@@ -80,7 +79,7 @@ def speak_response(text):
     }
     
     payload = {
-        "model_id": "sonic-english",
+        "model_id": "sonic-latest",  # Using the official supported dynamic alias
         "transcript": text,
         "voice": {
             "mode": "id",
@@ -107,6 +106,7 @@ def speak_response(text):
         sys.stdout.flush()
         
     return None
+
 
 def chat_with_jarvis(speaker_type, user_input):
     bullets_text = "\n".join(load_memory())
