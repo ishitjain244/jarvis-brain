@@ -1,4 +1,4 @@
 groq
 cartesia
-speechrecognition
-pyaudio
+fastapi
+uvicorn
