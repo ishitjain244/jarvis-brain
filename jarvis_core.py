@@ -47,34 +47,41 @@ def speak(text):
 
 def ask_render_brain(query):
     global session_history
-    if not query.strip():
-        return "I didn't catch that query."
+    clean_query = query.strip(" ,.?!")
+    if not clean_query:
+        return "I didn't catch a valid question."
     
+    # Send a clean, simplified payload to prevent Render 500 errors
     payload = {
-        "message": query,
+        "message": clean_query,
         "history": session_history
     }
     
     try:
-        response = requests.post(RENDER_API_URL, json=payload, timeout=20)
+        print(f"Sending to Render: '{clean_query}'")
+        response = requests.post(RENDER_API_URL, json=payload, timeout=25)
+        
         if response.status_code == 200:
-            answer = response.json().get("response", "I received an empty response.")
-            session_history.append({"user": query, "jarvis": answer})
+            data = response.json()
+            answer = data.get("response") or data.get("answer") or str(data)
+            session_history.append({"user": clean_query, "jarvis": answer})
             return answer
         else:
-            print(f"[Render Error Details]: {response.text}")
-            return f"Server error: {response.status_code}"
+            print(f"[Render Error {response.status_code}]: {response.text}")
+            return "My cloud server encountered an error processing that."
+            
     except Exception as e:
-        return f"Could not reach Render backend: {e}"
+        print(f"[Connection Exception]: {e}")
+        return "I couldn't reach my cloud backend."
 
 def active_conversation_loop(recognizer, source):
-    """Active dialogue loop for 60 seconds after wake word is verified."""
-    print("\n[ACTIVE SESSION ENGAGED: Listening for your commands...]\n")
+    """Active 60-second dialogue loop after wake word confirmation."""
+    print("\n[ACTIVE SESSION ENGAGED: Free-form speech enabled for 60s]\n")
     session_start_time = time.time()
     
     while time.time() - session_start_time < 60:
         try:
-            print("Listening for command...")
+            print("Listening for your command...")
             audio = recognizer.listen(source, timeout=12, phrase_time_limit=15)
             query = recognizer.recognize_google(audio).strip()
             
@@ -90,7 +97,6 @@ def active_conversation_loop(recognizer, source):
             answer = ask_render_brain(query)
             speak(answer)
             
-            # Reset active timer on successful turn
             session_start_time = time.time()
             
         except sr.WaitTimeoutError:
@@ -101,7 +107,7 @@ def active_conversation_loop(recognizer, source):
             print(f"[Speech Service Error]: {e}")
             break
             
-    print("\n[Active session timed out. Returning to strict wake-word standby.]\n")
+    print("\n[Active session timed out. Returning to standby.]\n")
 
 def listen():
     recognizer = sr.Recognizer()
@@ -109,27 +115,26 @@ def listen():
     recognizer.pause_threshold = 1.5
 
     with sr.Microphone() as source:
-        print("\nCalibrating microphone for ambient noise... Please remain quiet.")
+        print("\nCalibrating microphone... Please stay quiet.")
         recognizer.adjust_for_ambient_noise(source, duration=2.0)
         print("\n==================================================")
-        print("   STRICT WAKE-WORD STANDBY MODE ACTIVE          ")
-        print("   (Listening ONLY for 'Jarvis')                 ")
+        print("   PRIVACY STANDBY ACTIVE (Listening for 'Jarvis')")
         print("==================================================\n")
         
         while True:
             try:
-                # Capture audio chunk safely in standby
                 audio = recognizer.listen(source, phrase_time_limit=8)
                 text = recognizer.recognize_google(audio).lower().strip()
                 
-                # STRICT FILTER: If 'jarvis' is not explicitly in the text, ignore entirely.
+                # Strict check: ignore everything unless 'jarvis' is in the text
                 if WAKE_WORD not in text:
                     continue
                 
-                print(f"\n[Wake Word Verified!] Heard: '{text}'")
+                print(f"\n[Wake Word Triggered!] Recognized: '{text}'")
                 
-                # Extract any command following 'jarvis' in the same utterance
-                initial_query = text.split(WAKE_WORD, 1)[-1].strip()
+                # Extract any words spoken after 'jarvis'
+                parts = text.split(WAKE_WORD, 1)
+                initial_query = parts[1].strip(" ,.?!") if len(parts) > 1 else ""
                 
                 if initial_query:
                     print(f"You: {initial_query}")
@@ -138,15 +143,13 @@ def listen():
                 else:
                     speak("Yes, I'm listening.")
                 
-                # Enter the active conversation session
+                # Enter the active session window
                 active_conversation_loop(recognizer, source)
                 
             except sr.UnknownValueError:
-                # Ambient noise that couldn't be parsed — safely ignore
                 continue
             except sr.RequestError as e:
-                # Handle temporary network/speech API hiccups gracefully without crashing
-                print(f"[Standby Network Warning]: {e}")
+                print(f"[Network Warning]: {e}")
                 time.sleep(2)
                 continue
             except KeyboardInterrupt:
