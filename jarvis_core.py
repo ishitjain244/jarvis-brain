@@ -68,13 +68,13 @@ def ask_render_brain(query):
         return f"Could not reach Render backend: {e}"
 
 def active_conversation_loop(recognizer, source):
-    """Echo Dot bluetooth-stream active session loop with generous pause tolerance."""
-    print("\n[BLUETOOTH AUDIO STREAM ACTIVE: Listening for your commands...]\n")
+    """Active dialogue loop for 60 seconds after wake word is verified."""
+    print("\n[ACTIVE SESSION ENGAGED: Listening for your commands...]\n")
     session_start_time = time.time()
     
     while time.time() - session_start_time < 60:
         try:
-            print("Listening...")
+            print("Listening for command...")
             audio = recognizer.listen(source, timeout=12, phrase_time_limit=15)
             query = recognizer.recognize_google(audio).strip()
             
@@ -90,7 +90,7 @@ def active_conversation_loop(recognizer, source):
             answer = ask_render_brain(query)
             speak(answer)
             
-            # Reset the 1-minute active timer on every successful turn
+            # Reset active timer on successful turn
             session_start_time = time.time()
             
         except sr.WaitTimeoutError:
@@ -101,44 +101,53 @@ def active_conversation_loop(recognizer, source):
             print(f"[Speech Service Error]: {e}")
             break
             
-    print("\n[Active session timed out. Returning to wake-word standby.]\n")
+    print("\n[Active session timed out. Returning to strict wake-word standby.]\n")
 
 def listen():
     recognizer = sr.Recognizer()
     recognizer.dynamic_energy_threshold = True
-    
-    # Tuned specifically for Echo Dot Bluetooth microphone stream pacing
-    recognizer.pause_threshold = 1.5        # Gives you 1.5 seconds of silence buffer before processing
-    recognizer.non_speaking_duration = 0.5
+    recognizer.pause_threshold = 1.5
 
     with sr.Microphone() as source:
-        print("\nCalibrating for Echo Dot microphone stream...")
+        print("\nCalibrating microphone for ambient noise... Please remain quiet.")
         recognizer.adjust_for_ambient_noise(source, duration=2.0)
         print("\n==================================================")
-        print("   JARVIS BLUETOOTH MIC STANDBY ACTIVE           ")
-        print("   Say 'Jarvis' to open active session window    ")
+        print("   STRICT WAKE-WORD STANDBY MODE ACTIVE          ")
+        print("   (Listening ONLY for 'Jarvis')                 ")
         print("==================================================\n")
         
         while True:
             try:
-                audio = recognizer.listen(source, phrase_time_limit=10)
-                text = recognizer.recognize_google(audio).lower()
+                # Capture audio chunk safely in standby
+                audio = recognizer.listen(source, phrase_time_limit=8)
+                text = recognizer.recognize_google(audio).lower().strip()
                 
-                if WAKE_WORD in text:
-                    print(f"[Triggered via Bluetooth Mic!] Heard: '{text}'")
-                    
-                    initial_query = text.split(WAKE_WORD, 1)[-1].strip()
-                    
-                    if initial_query:
-                        print(f"You: {initial_query}")
-                        answer = ask_render_brain(initial_query)
-                        speak(answer)
-                    else:
-                        speak("Yes, I'm listening.")
-                    
-                    active_conversation_loop(recognizer, source)
-                    
-            except (sr.UnknownValueError, sr.RequestError):
+                # STRICT FILTER: If 'jarvis' is not explicitly in the text, ignore entirely.
+                if WAKE_WORD not in text:
+                    continue
+                
+                print(f"\n[Wake Word Verified!] Heard: '{text}'")
+                
+                # Extract any command following 'jarvis' in the same utterance
+                initial_query = text.split(WAKE_WORD, 1)[-1].strip()
+                
+                if initial_query:
+                    print(f"You: {initial_query}")
+                    answer = ask_render_brain(initial_query)
+                    speak(answer)
+                else:
+                    speak("Yes, I'm listening.")
+                
+                # Enter the active conversation session
+                active_conversation_loop(recognizer, source)
+                
+            except sr.UnknownValueError:
+                # Ambient noise that couldn't be parsed — safely ignore
+                continue
+            except sr.RequestError as e:
+                # Handle temporary network/speech API hiccups gracefully without crashing
+                print(f"[Standby Network Warning]: {e}")
+                time.sleep(2)
                 continue
             except KeyboardInterrupt:
                 print("\n\n[Shutting down Jarvis session.]")
