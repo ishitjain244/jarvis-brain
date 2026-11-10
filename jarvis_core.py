@@ -68,14 +68,14 @@ def ask_render_brain(query):
         return f"Could not reach Render backend: {e}"
 
 def active_conversation_loop(recognizer, source):
-    """Keeps the mic open for active dialogue for 60 seconds after wake word."""
-    print("\n[ACTIVE SESSION ENGAGED: Listening for commands for the next 60 seconds...]\n")
+    """Echo Dot bluetooth-stream active session loop with generous pause tolerance."""
+    print("\n[BLUETOOTH AUDIO STREAM ACTIVE: Listening for your commands...]\n")
     session_start_time = time.time()
     
     while time.time() - session_start_time < 60:
         try:
-            print("Listening for your command...")
-            audio = recognizer.listen(source, timeout=8, phrase_time_limit=10)
+            print("Listening...")
+            audio = recognizer.listen(source, timeout=12, phrase_time_limit=15)
             query = recognizer.recognize_google(audio).strip()
             
             if not query:
@@ -83,46 +83,50 @@ def active_conversation_loop(recognizer, source):
                 
             print(f"You: {query}")
             
-            # Allow user to manually end session
-            if query.lower() in ["stop listening", "go to sleep", "exit", "quit"]:
-                speak("Going back to sleep.")
+            if query.lower() in ["stop listening", "go to sleep", "exit", "quit", "sleep"]:
+                speak("Going back to standby.")
                 return
 
             answer = ask_render_brain(query)
             speak(answer)
             
-            # Reset timer on successful interaction so it extends the active window
+            # Reset the 1-minute active timer on every successful turn
             session_start_time = time.time()
             
-        except (sr.WaitTimeoutError, sr.UnknownValueError):
-            # Just loop back if nothing was heard in this specific chunk
+        except sr.WaitTimeoutError:
+            continue
+        except sr.UnknownValueError:
             continue
         except sr.RequestError as e:
             print(f"[Speech Service Error]: {e}")
             break
             
-    print("\n[Active session timed out. Returning to wake-word standby mode.]\n")
+    print("\n[Active session timed out. Returning to wake-word standby.]\n")
 
 def listen():
     recognizer = sr.Recognizer()
     recognizer.dynamic_energy_threshold = True
     
+    # Tuned specifically for Echo Dot Bluetooth microphone stream pacing
+    recognizer.pause_threshold = 1.5        # Gives you 1.5 seconds of silence buffer before processing
+    recognizer.non_speaking_duration = 0.5
+
     with sr.Microphone() as source:
-        recognizer.adjust_for_ambient_noise(source, duration=0.8)
+        print("\nCalibrating for Echo Dot microphone stream...")
+        recognizer.adjust_for_ambient_noise(source, duration=2.0)
         print("\n==================================================")
-        print("   JARVIS STANDBY MODE ONLINE                    ")
-        print("   Say 'Jarvis' to start a 1-minute session      ")
+        print("   JARVIS BLUETOOTH MIC STANDBY ACTIVE           ")
+        print("   Say 'Jarvis' to open active session window    ")
         print("==================================================\n")
         
         while True:
             try:
-                audio = recognizer.listen(source, phrase_time_limit=5)
+                audio = recognizer.listen(source, phrase_time_limit=10)
                 text = recognizer.recognize_google(audio).lower()
                 
                 if WAKE_WORD in text:
-                    print(f"[Triggered!] Wake word detected in: '{text}'")
+                    print(f"[Triggered via Bluetooth Mic!] Heard: '{text}'")
                     
-                    # Extract any query said right after "Jarvis" in the same sentence
                     initial_query = text.split(WAKE_WORD, 1)[-1].strip()
                     
                     if initial_query:
@@ -132,7 +136,6 @@ def listen():
                     else:
                         speak("Yes, I'm listening.")
                     
-                    # Enter the 1-minute active conversation loop
                     active_conversation_loop(recognizer, source)
                     
             except (sr.UnknownValueError, sr.RequestError):
