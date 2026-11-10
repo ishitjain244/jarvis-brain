@@ -3,54 +3,71 @@ import subprocess
 import platform
 import requests
 import speech_recognition as sr
-from cartesia import Cartesia
 
 # ---------------------------------------------------------
 # CONFIGURATION
 # ---------------------------------------------------------
 WAKE_WORD = "jarvis"
-RENDER_API_URL = "https://jarvis-brain-3y1y.onrender.com/chat"  # Replace with your actual Render URL
+
+# Replace with your actual Render web service URL (keep /chat at the end)
+RENDER_API_URL = "https://your-app-name.onrender.com/chat"
+
+# Cartesia REST API Configuration
+CARTESIA_API_KEY = os.environ.get("CARTESIA_API_KEY")
 CARTESIA_VOICE_ID = "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
 
-cartesia_client = Cartesia(api_key=os.environ.get("CARTESIA_API_KEY"))
-
-# Local conversation session history for the client to pass along
 session_history = []
 
 # ---------------------------------------------------------
-# TEXT-TO-SPEECH (CARTESIA)
+# TEXT-TO-SPEECH (DIRECT CARTESIA REST API)
 # ---------------------------------------------------------
 def speak(text):
-    print(f"Jarvis: {text}")
+    print(f"\nJarvis: {text}\n")
     output_filename = "response.wav"
     
     try:
-        audio = cartesia_client.tts.generate(
-            model_id="sonic-latest",
-            transcript=text,
-            voice=CARTESIA_VOICE_ID,
-            output_format={
+        url = "https://api.cartesia.ai/tts/bytes"
+        headers = {
+            "Authorization": f"Bearer {CARTESIA_API_KEY}",
+            "Cartesia-Version": "2024-06-10",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model_id": "sonic-latest",
+            "transcript": text,
+            "voice": {
+                "mode": "id",
+                "id": CARTESIA_VOICE_ID
+            },
+            "output_format": {
                 "container": "wav",
                 "encoding": "pcm_f32le",
                 "sample_rate": 44100
             }
-        )
-        audio.write_to_file(output_filename)
+        }
         
-        # Cross-platform playback (Termux / Windows / Linux)
-        if "ANDROID_ARGUMENT" in os.environ or os.path.exists("/data/data/com.termux"):
-            subprocess.run(["mpv", "--really-quiet", output_filename], stderr=subprocess.DEVNULL)
-        elif platform.system() == "Windows":
-            import winsound
-            winsound.PlaySound(output_filename, winsound.SND_FILENAME)
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            with open(output_filename, "wb") as f:
+                f.write(response.content)
+            
+            # Audio playback routing
+            if "ANDROID_ARGUMENT" in os.environ or os.path.exists("/data/data/com.termux"):
+                subprocess.run(["mpv", "--really-quiet", output_filename], stderr=subprocess.DEVNULL)
+            elif platform.system() == "Windows":
+                import winsound
+                winsound.PlaySound(output_filename, winsound.SND_FILENAME)
+            else:
+                subprocess.run(["aplay", output_filename], stderr=subprocess.DEVNULL)
         else:
-            subprocess.run(["aplay", output_filename], stderr=subprocess.DEVNULL)
+            print(f"[Cartesia API Error {response.status_code}]: {response.text}")
 
     except Exception as e:
         print(f"[Speech Error]: {e}")
 
 # ---------------------------------------------------------
-# TALK TO RENDER BRAIN
+# RENDER CLOUD BRAIN
 # ---------------------------------------------------------
 def ask_render_brain(query):
     global session_history
@@ -62,10 +79,7 @@ def ask_render_brain(query):
     try:
         response = requests.post(RENDER_API_URL, json=payload, timeout=15)
         if response.status_code == 200:
-            data = response.json()
-            answer = data.get("response", "I received an empty response.")
-            
-            # Update local session history log
+            answer = response.json().get("response", "I received an empty response.")
             session_history.append({"user": query, "jarvis": answer})
             return answer
         else:
@@ -74,7 +88,7 @@ def ask_render_brain(query):
         return f"Could not reach Render backend: {e}"
 
 # ---------------------------------------------------------
-# SENSES (STT & WAKE WORD LISTENER)
+# LIVE CONTINUOUS VOICE LOOP
 # ---------------------------------------------------------
 def listen():
     recognizer = sr.Recognizer()
@@ -82,7 +96,10 @@ def listen():
     
     with sr.Microphone() as source:
         recognizer.adjust_for_ambient_noise(source, duration=0.8)
-        print("\n[Listening in background... Say 'Jarvis' to activate]")
+        print("\n==================================================")
+        print("   JARVIS LIVE VOICE SESSION IS ONLINE           ")
+        print("   Listening locally... Say 'Jarvis' to activate ")
+        print("==================================================\n")
         
         while True:
             try:
@@ -90,15 +107,15 @@ def listen():
                 text = recognizer.recognize_google(audio).lower()
                 
                 if WAKE_WORD in text:
-                    print(f"\n[Wake word detected!]")
+                    print(f"[Triggered!] Heard: '{text}'")
                     query = text.split(WAKE_WORD, 1)[-1].strip()
                     
                     if not query:
-                        speak("Yes?")
-                        audio_query = recognizer.listen(source, timeout=5, phrase_time_limit=10)
+                        speak("I am listening.")
+                        audio_query = recognizer.listen(source, timeout=5, phrase_time_limit=8)
                         query = recognizer.recognize_google(audio_query)
                     
-                    print(f"User: {query}")
+                    print(f"You: {query}")
                     answer = ask_render_brain(query)
                     speak(answer)
                     
@@ -108,7 +125,7 @@ def listen():
                 print(f"[Speech Service Error]: {e}")
                 continue
             except KeyboardInterrupt:
-                print("\n[Shutting down local Jarvis client.]")
+                print("\n\n[Shutting down Jarvis session.]")
                 break
 
 if __name__ == "__main__":
