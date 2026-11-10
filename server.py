@@ -31,7 +31,7 @@ def chat(payload: QueryRequest):
         messages.append({"role": "user", "content": payload.message})
 
         completion = groq_client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
+            model="qwen/qwen3.8-27b",
             messages=messages,
             temperature=0.6,
             max_tokens=200
