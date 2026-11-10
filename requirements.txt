@@ -1,3 +1,4 @@
-requests
-flask
-gunicorn
+groq
+cartesia
+speechrecognition
+pyaudio
