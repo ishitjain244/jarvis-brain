@@ -8,13 +8,21 @@ import speech_recognition as sr
 
 WAKE_WORD = "jarvis"
 RENDER_API_URL = "https://jarvis-brain-3y1y.onrender.com/chat"
-CARTESIA_API_KEY = os.environ.get("CARTESIA_API_KEY")
-CARTESIA_VOICE_ID = "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
 
+# Load and verify Cartesia API key
+CARTESIA_API_KEY = os.environ.get("CARTESIA_API_KEY")
+if not CARTESIA_API_KEY:
+    print("[WARNING]: CARTESIA_API_KEY environment variable is missing! Export it using: export CARTESIA_API_KEY='your_key'")
+
+CARTESIA_VOICE_ID = "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
 session_history = []
 
 def speak(text):
     print(f"\nJarvis: {text}\n")
+    if not CARTESIA_API_KEY:
+        print("[Speech Error]: Cannot generate audio because CARTESIA_API_KEY is not set.")
+        return
+        
     output_filename = "response.wav"
     try:
         url = "https://api.cartesia.ai/tts/bytes"
@@ -51,31 +59,31 @@ def ask_render_brain(query):
     if not clean_query:
         return "I didn't catch a valid question."
     
-    # Send a clean, simplified payload to prevent Render 500 errors
-    payload = {
-        "message": clean_query,
-        "history": session_history
-    }
+    # Try different common payload structures to avoid FastAPI 500 validation mismatch
+    payloads_to_try = [
+        {"message": clean_query, "history": session_history},
+        {"prompt": clean_query, "history": session_history},
+        {"query": clean_query}
+    ]
     
-    try:
-        print(f"Sending to Render: '{clean_query}'")
-        response = requests.post(RENDER_API_URL, json=payload, timeout=25)
-        
-        if response.status_code == 200:
-            data = response.json()
-            answer = data.get("response") or data.get("answer") or str(data)
-            session_history.append({"user": clean_query, "jarvis": answer})
-            return answer
-        else:
-            print(f"[Render Error {response.status_code}]: {response.text}")
-            return "My cloud server encountered an error processing that."
+    for payload in payloads_to_try:
+        try:
+            print(f"Sending request to Render...")
+            response = requests.post(RENDER_API_URL, json=payload, timeout=25)
             
-    except Exception as e:
-        print(f"[Connection Exception]: {e}")
-        return "I couldn't reach my cloud backend."
+            if response.status_code == 200:
+                data = response.json()
+                answer = data.get("response") or data.get("answer") or data.get("reply") or str(data)
+                session_history.append({"user": clean_query, "jarvis": answer})
+                return answer
+            elif response.status_code != 422: # 422 means validation error, try next payload format
+                print(f"[Render Error {response.status_code}]: {response.text}")
+        except Exception as e:
+            print(f"[Connection Exception]: {e}")
+            
+    return "My cloud server encountered a schema validation error."
 
 def active_conversation_loop(recognizer, source):
-    """Active 60-second dialogue loop after wake word confirmation."""
     print("\n[ACTIVE SESSION ENGAGED: Free-form speech enabled for 60s]\n")
     session_start_time = time.time()
     
@@ -126,13 +134,11 @@ def listen():
                 audio = recognizer.listen(source, phrase_time_limit=8)
                 text = recognizer.recognize_google(audio).lower().strip()
                 
-                # Strict check: ignore everything unless 'jarvis' is in the text
                 if WAKE_WORD not in text:
                     continue
                 
                 print(f"\n[Wake Word Triggered!] Recognized: '{text}'")
                 
-                # Extract any words spoken after 'jarvis'
                 parts = text.split(WAKE_WORD, 1)
                 initial_query = parts[1].strip(" ,.?!") if len(parts) > 1 else ""
                 
@@ -143,7 +149,6 @@ def listen():
                 else:
                     speak("Yes, I'm listening.")
                 
-                # Enter the active session window
                 active_conversation_loop(recognizer, source)
                 
             except sr.UnknownValueError:
