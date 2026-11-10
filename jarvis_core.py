@@ -9,7 +9,7 @@ from cartesia import Cartesia
 # CONFIGURATION
 # ---------------------------------------------------------
 WAKE_WORD = "jarvis"
-RENDER_API_URL = "https://your-app-name.onrender.com/chat"  # Replace with your actual Render URL
+RENDER_API_URL = "https://jarvis-brain-3y1y.onrender.com/chat"  # Replace with your actual Render URL
 CARTESIA_VOICE_ID = "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
 
 cartesia_client = Cartesia(api_key=os.environ.get("CARTESIA_API_KEY"))
