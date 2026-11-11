@@ -1,4 +1,6 @@
-groq
-cartesia
 fastapi
 uvicorn
+groq
+requests
+duckduckgo-search
+pydantic
