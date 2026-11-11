@@ -1,4 +1,6 @@
 import os
+import datetime
+import pytz
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
@@ -17,28 +19,26 @@ async def chat_endpoint(request: ChatRequest):
     try:
         user_msg = request.message
         
-        # System instructions enforcing strict tense, memory retention, and ultra-concise replies
+        # Calculate precise Indian Standard Time (IST) dynamically
+        ist = pytz.timezone('Asia/Kolkata')
+        now = datetime.datetime.now(ist)
+        current_date_str = now.strftime("%A, %B %d, %Y")
+        current_time_str = now.strftime("%I:%M %p")
+
         system_prompt = (
-            "You are Jarvis, an advanced, ultra-concise voice assistant.\n"
+            f"You are Jarvis, an ultra-concise, accurate voice assistant.\n"
+            f"CURRENT TIME CONTEXT: Today is {current_date_str}. The current local time is {current_time_str} IST.\n\n"
             "CRITICAL RULES:\n"
-            "1. TENSE MATCHING: If the user asks about past events/scores, reply in the past tense. "
-            "If they ask about current status, reply in the present tense. "
-            "If they ask about future events (like upcoming board exams, schedules, or timelines), "
-            "you MUST look up future/current data (current year is 2026) and never accidentally give previous year dates.\n"
-            "2. MEMORY PERSISTENCE: Remember all details the user shares during the conversation "
-            "(such as their location, subjects, preferences, or goals) and retain them across turns.\n"
-            "3. BREVITY: Keep answers strictly between 1 to 2 short, punchy sentences optimized for speech.\n"
-            "4. Never say you lack data; use built-in search for any real-time or factual lookup."
+            "1. ACCURACY: Always use the current time context above for date/time questions. Use built-in web search for AQI, weather, news, or scores.\n"
+            "2. TENSE CONSISTENCY: Match the user's tense. Reply to past questions in past tense, present in present tense, and upcoming/future questions in future tense.\n"
+            "3. CONCISENESS: Keep all responses strictly to 1 or 2 short sentences max. No long lists or unnecessary fluff.\n"
+            "4. RELIABILITY: Always return plain text replies suitable for direct speech output."
         )
 
         messages = [{"role": "system", "content": system_prompt}]
 
-        # Inject persistent memory context if available
         if request.user_context:
-            messages.append({
-                "role": "system", 
-                "content": f"Persistent User Context & Memory: {request.user_context}"
-            })
+            messages.append({"role": "system", "content": f"User Context: {request.user_context}"})
 
         if request.history:
             for turn in request.history:
@@ -52,8 +52,8 @@ async def chat_endpoint(request: ChatRequest):
             model="openai/gpt-oss-120b",
             messages=messages,
             tools=[{"type": "browser_search"}],
-            temperature=0.3,
-            max_tokens=180
+            temperature=0.2,
+            max_tokens=150
         )
 
         reply = completion.choices[0].message.content.strip()
@@ -65,4 +65,4 @@ async def chat_endpoint(request: ChatRequest):
 
 @app.get("/")
 def home():
-    return {"status": "Jarvis backend online with memory & tense intelligence."}
+    return {"status": "Jarvis backend fully operational."}
