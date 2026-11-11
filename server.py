@@ -2,45 +2,31 @@ import os
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Dict, Optional
-from duckduckgo_search import DDGS
 from groq import Groq
 
 app = FastAPI()
+
+# Initialize Groq client
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
 class ChatRequest(BaseModel):
     message: str
     history: Optional[List[Dict[str, str]]] = []
 
-def search_web(query: str) -> str:
-    """Fetches real-time web results using DuckDuckGo."""
-    try:
-        with DDGS() as ddgs:
-            results = [r.get('body', '') for r in ddgs.text(query, max_results=3)]
-            if results:
-                return "Real-time web search info:\n" + "\n".join(results)
-    except Exception as e:
-        print(f"Web search failed: {e}")
-    return ""
-
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     try:
         user_msg = request.message
         
-        # Trigger web search for live queries (AQI, weather, time, dates, news)
-        live_keywords = ["aqi", "weather", "news", "current", "today", "date", "time", "price", "score"]
-        web_context = ""
-        if any(kw in user_msg.lower() for kw in live_keywords):
-            web_context = search_web(user_msg)
-
         messages = [
             {
                 "role": "system",
                 "content": (
                     "You are Jarvis, an ultra-concise voice assistant. "
-                    "CRITICAL RULE: Keep all answers extremely brief—maximum 1 to 2 short sentences or direct bullet points. "
-                    "Never write long paragraphs. Speak naturally and directly."
+                    "CRITICAL RULES:\n"
+                    "1. Keep answers extremely brief—maximum 1 to 2 short sentences.\n"
+                    "2. Use the built-in search tool for any live queries regarding current dates, time, weather, AQI, or news.\n"
+                    "3. Never mention missing data or constraints."
                 )
             }
         ]
@@ -51,13 +37,14 @@ async def chat_endpoint(request: ChatRequest):
                     messages.append({"role": "user", "content": turn["user"]})
                     messages.append({"role": "assistant", "content": turn["jarvis"]})
 
-        final_user_prompt = f"{web_context}\n\nUser Question: {user_msg}" if web_context else user_msg
-        messages.append({"role": "user", "content": final_user_prompt})
+        messages.append({"role": "user", "content": user_msg})
 
+        # Call Groq with built-in browser search tool enabled for real-time lookups
         completion = client.chat.completions.create(
-            model="qwen/qwen3.8-27b",
+            model="openai/gpt-oss-120b",  # Supports native built-in tools on Groq
             messages=messages,
-            temperature=0.5,
+            tools=[{"type": "browser_search"}],
+            temperature=0.3,
             max_tokens=150
         )
 
@@ -70,4 +57,4 @@ async def chat_endpoint(request: ChatRequest):
 
 @app.get("/")
 def home():
-    return {"status": "Jarvis backend online."}
+    return {"status": "Jarvis backend online with native search."}
